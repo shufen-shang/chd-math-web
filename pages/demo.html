@@ -1,28 +1,101 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>动态可视化交互模型</title>
-  <script src="https://www.geogebra.org/apps/script/api.js"></script>
-  <style>
-    body { margin: 0; font-family: sans-serif; text-align: center; }
-    #applet { width: 800px; height: 500px; margin: 20px auto; border: 1px solid #ccc; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动态可视化交互模型</title>
+<!-- 你的 deployggb.js 路径正确 -->
+<script src="../js/ggb/deployggb.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #0b0e14; color: #e6edf3; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  #header { position: fixed; top: 0; left: 0; right: 0; height: 52px; background: rgba(15,20,28,.96); border-bottom: 1px solid #2a3a4a; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; z-index: 100; }
+  #title { font-size: 16px; font-weight: 800; color: #00f0ff; letter-spacing: 1px; }
+  #backBtn { background: rgba(0,240,255,.15); border: 1px solid #00f0ff; color: #00f0ff; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 800; transition: background .2s; }
+  #backBtn:hover { background: rgba(0,240,255,.35); }
+  #applet { position: fixed; top: 52px; left: 0; right: 0; bottom: 0; width: 100%; height: calc(100vh - 52px); }
+  #loading { position: fixed; top: 52px; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; background: #0b0e14; z-index: 50; }
+  #loading .msg { text-align: center; font-size: 15px; line-height: 2; }
+  #loading .ok { color: #34d399; }
+  #loading .err { color: #f87171; }
+  #loading .warn { color: #fbbf24; }
+</style>
 </head>
 <body>
-  <h2>知识点演示：<span id="title"></span></h2>
-  <p>（动态可视化交互模型组提供 .ggb 后，此处将显示 GeoGebra 动态可视化交互模型）</p>
-  <div id="applet"></div>
-  <script>
-    var id = new URLSearchParams(location.search).get('id') || 'default';
-    document.getElementById('title').innerText = id;
-    // 后续动态可视化交互模型组给 material_id 后填在这里
-    var ggbApp = new GGBApplet({
-      "material_id": "j4k3l2m1", 
-      "width": 800, "height": 500,
-      "showToolBar": true
-    }, true);
-    ggbApp.inject('applet');
-  </script>
+
+<div id="header">
+  <span id="title">动态可视化交互模型</span>
+  <button id="backBtn" onclick="window.location.href='../index.html'">⬅ 返回图谱</button>
+</div>
+
+<div id="loading">
+  <div class="msg" id="loadingMsg">
+    <span class="warn">⏳ 正在初始化 GeoGebra 引擎...</span>
+  </div>
+</div>
+
+<div id="applet"></div>
+
+<script>
+(function() {
+  var params = new URLSearchParams(location.search);
+  var id = params.get('id') || '';
+  document.getElementById('title').innerText = id ? ('模型演示：' + id) : '动态可视化交互模型';
+
+  // 匹配你实际的文件名 G20_Derivative.ggb
+  var fileMap = {
+    'GP-01': 'files/GP-01_set_interval.ggb',
+    'GP-20': 'files/G20_Derivative.ggb' 
+  };
+
+  var ggbFile = fileMap[id];
+
+  if (!ggbFile) {
+    document.getElementById('loadingMsg').innerHTML = '<span class="warn">暂未配置模型文件（' + (id || '无ID') + '）</span><br><br><span style="font-size:12px;color:#8ab4f8">请在 demo.html 的 fileMap 中添加映射</span><br><br><button onclick="window.location.href=\'../index.html\'" style="background:rgba(0,240,255,.15);border:1px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:13px;">⬅ 返回图谱</button>';
+    return;
+  }
+
+  if (typeof GGBApplet === 'undefined') {
+    document.getElementById('loadingMsg').innerHTML = '<span class="err">❌ GeoGebra 离线库未加载<br><br>请确认 js/ggb/deployggb.js 存在</span>';
+    return;
+  }
+
+  var ggbApp = new GGBApplet({
+    "filename": ggbFile,
+    "width": "100%",
+    "height": "100%",
+    "showToolBar": true,
+    "showAlgebraInput": true,
+    "showMenuBar": true,
+    "showResetIcon": true,
+    "enableShiftDragZoom": true,
+    "useBrowserForJS": false // 纯本地
+  }, true);
+
+  // 关键修正：适配你当前的 js/ggb/HTML5\5.0/web3d/ 目录
+  ggbApp.setHTML5Codebase('../js/ggb/HTML5\\5.0/web3d/');
+
+  window.addEventListener('load', function() {
+    try {
+      ggbApp.inject('applet', 'html5');
+      setTimeout(function() {
+        var ld = document.getElementById('loading');
+        if (ld) ld.style.display = 'none';
+      }, 1500);
+    } catch(e) {
+      console.error('GeoGebra 注入失败:', e);
+      document.getElementById('loadingMsg').innerHTML = '<span class="err">❌ 模型加载失败<br><br>请检查：<br>1. files/ 下是否存在 ' + ggbFile + '<br>2. js/ggb/HTML5\\5.0/web3d/web3d.nocache.js 是否存在<br>3. 控制台是否有 404</span><br><br><button onclick="window.location.href=\'../index.html\'" style="background:rgba(0,240,255,.15);border:1px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:13px;margin-top:10px;">⬅ 返回图谱</button>';
+    }
+  });
+
+  setTimeout(function() {
+    var ld = document.getElementById('loading');
+    if (ld && ld.style.display !== 'none') {
+      document.getElementById('loadingMsg').innerHTML += '<br><span style="font-size:12px;color:#8ab4f8;margin-top:10px;display:inline-block;">若长时间无响应，请检查离线包 web3d.nocache.js 路径</span>';
+    }
+  }, 3000);
+
+})();
+</script>
 </body>
 </html>
