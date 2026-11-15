@@ -42,11 +42,16 @@
   var id = params.get('id') || '';
   document.getElementById('title').innerText = id ? ('模型演示：' + id) : '动态可视化交互模型';
 
-  // 匹配你实际的文件名 G20_Derivative.ggb
-  var fileMap = {
-    'GP-01': 'files/GP-01_set_interval.ggb',
-    'GP-20': 'files/G20_Derivative.ggb' 
-  };
+  // 匹配你实际的文件名
+var fileMap = {
+  'GP-01': 'files/GP-01_Interval_Neighborhood_Number_Line.ggb',
+  'GP-02': 'files/GP-02_Supremum_Infimum_Dynamic.ggb',
+  'GP-05': 'files/GP-05_Ultimate_Limit_Permutation.ggb',
+  'GP-07': 'files/GP-07_Monotone_Bounded_Theorem.ggb',
+  'GP-20': 'files/GP-20_Derivative.ggb',
+  'GP-26': 'files/GP-26_Rolle_Lagrange.ggb',
+  'GP-42': 'files/GP-42_Riemann_Sum_Trapezoid_Area.ggb'
+};
 
   var ggbFile = fileMap[id];
 
