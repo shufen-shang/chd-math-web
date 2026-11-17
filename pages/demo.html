@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>动态可视化交互模型</title>
-<!-- 你的 deployggb.js 路径正确 -->
 <script src="../js/ggb/deployggb.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,10 +14,11 @@
   #backBtn:hover { background: rgba(0,240,255,.35); }
   #applet { position: fixed; top: 52px; left: 0; right: 0; bottom: 0; width: 100%; height: calc(100vh - 52px); }
   #loading { position: fixed; top: 52px; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; background: #0b0e14; z-index: 50; }
-  #loading .msg { text-align: center; font-size: 15px; line-height: 2; }
+  #loading .msg { text-align: center; font-size: 15px; line-height: 2; max-width: 90%; }
   #loading .ok { color: #34d399; }
   #loading .err { color: #f87171; }
   #loading .warn { color: #fbbf24; }
+  .btn { margin-top: 14px; background: rgba(0,240,255,.15); border: 1px solid #00f0ff; color: #00f0ff; padding: 7px 18px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 800; }
 </style>
 </head>
 <body>
@@ -37,35 +37,42 @@
 <div id="applet"></div>
 
 <script>
-(function() {
+(function () {
   var params = new URLSearchParams(location.search);
-  var id = params.get('id') || '';
+  var id = (params.get('id') || '').toUpperCase();
   document.getElementById('title').innerText = id ? ('模型演示：' + id) : '动态可视化交互模型';
 
-  // 匹配你实际的文件名
-var fileMap = {
-  'GP-01': 'files/GP-01_Interval_Neighborhood_Number_Line.ggb',
-  'GP-02': 'files/GP-02_Supremum_Infimum_Dynamic.ggb',
-  'GP-05': 'files/GP-05_Ultimate_Limit_Permutation.ggb',
-  'GP-07': 'files/GP-07_Monotone_Bounded_Theorem.ggb',
-  'GP-20': 'files/GP-20_Derivative.ggb',
-  'GP-26': 'files/GP-26_Rolle_Lagrange.ggb',
-  'GP-42': 'files/GP-42_Riemann_Sum_Trapezoid_Area.ggb'
-};
+  var fileMap = {
+    'GP-01': 'files/GP-01_Interval_Neighborhood_Number_Line.ggb',
+    'GP-02': 'files/GP-02_Supremum_Infimum_Dynamic.ggb',
+    'GP-05': 'files/GP-05_Ultimate_Limit_Permutation.ggb',
+    'GP-07': 'files/GP-07_Monotone_Bounded_Theorem.ggb',
+    'GP-20': 'files/GP-20_Derivative.ggb',
+    'GP-26': 'files/GP-26_Rolle_Lagrange.ggb',
+    'GP-42': 'files/GP-42_Riemann_Sum_Trapezoid_Area.ggb'
+  };
+
+  function fail(html) {
+    document.getElementById('loadingMsg').innerHTML =
+      html + '<br><br><button class="btn" onclick="window.location.href=\'../index.html\'">⬅ 返回图谱</button>';
+  }
 
   var ggbFile = fileMap[id];
-
   if (!ggbFile) {
-    document.getElementById('loadingMsg').innerHTML = '<span class="warn">暂未配置模型文件（' + (id || '无ID') + '）</span><br><br><span style="font-size:12px;color:#8ab4f8">请在 demo.html 的 fileMap 中添加映射</span><br><br><button onclick="window.location.href=\'../index.html\'" style="background:rgba(0,240,255,.15);border:1px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:13px;">⬅ 返回图谱</button>';
+    fail('<span class="warn">暂未配置模型文件（' + (id || '无ID') + '）</span><br>'
+       + '<span style="font-size:12px;color:#8ab4f8">请在 demo.html 的 fileMap 里补一行映射</span>');
     return;
   }
 
   if (typeof GGBApplet === 'undefined') {
-    document.getElementById('loadingMsg').innerHTML = '<span class="err">❌ GeoGebra 离线库未加载<br><br>请确认 js/ggb/deployggb.js 存在</span>';
+    fail('<span class="err">❌ GeoGebra 离线库未加载</span><br>'
+       + '<span style="font-size:12px;color:#8ab4f8">确认 ../js/ggb/deployggb.js 已推送且非 0B</span>');
     return;
   }
 
+  // ① 先造实例，第二个参数 false = 不自动注入（关键！别让它抢跑猜路径）
   var ggbApp = new GGBApplet({
+    "appName": "classic",
     "filename": ggbFile,
     "width": "100%",
     "height": "100%",
@@ -74,32 +81,47 @@ var fileMap = {
     "showMenuBar": true,
     "showResetIcon": true,
     "enableShiftDragZoom": true,
-    "useBrowserForJS": false // 纯本地
-  }, true);
+    "useBrowserForJS": false,
+    "language": "zh",
+    "borderColor": "#0b0e14"
+  }, false);   // ← false：手动掌控时序
 
-  // 关键修正：适配你当前的 js/ggb/HTML5/5.0/web3d/ 目录
-  ggbApp.setHTML5Codebase('../js/ggb/HTML5//5.0/web3d/');
+  // ② 注入前，强制指定 web3d 引擎路径（单斜杠，线上 Linux 才认）
+  ggbApp.setHTML5Codebase('../js/ggb/HTML5/5.0/web3d/');
 
-  window.addEventListener('load', function() {
+  // ③ 最后才手动注入 → 这次一定会带着正确路径去拉 web3d.nocache.js
+  function injectSafely() {
     try {
       ggbApp.inject('applet', 'html5');
-      setTimeout(function() {
-        var ld = document.getElementById('loading');
-        if (ld) ld.style.display = 'none';
-      }, 1500);
-    } catch(e) {
+    } catch (e) {
       console.error('GeoGebra 注入失败:', e);
-      document.getElementById('loadingMsg').innerHTML = '<span class="err">❌ 模型加载失败<br><br>请检查：<br>1. files/ 下是否存在 ' + ggbFile + '<br>2. js/ggb/HTML5\\5.0/web3d/web3d.nocache.js 是否存在<br>3. 控制台是否有 404</span><br><br><button onclick="window.location.href=\'../index.html\'" style="background:rgba(0,240,255,.15);border:1px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:13px;margin-top:10px;">⬅ 返回图谱</button>';
+      fail('<span class="err">❌ 模型注入异常</span><br>'
+         + '<span style="font-size:12px;color:#8ab4f8">' + e.message + '</span><br>'
+         + '<span style="font-size:12px;color:#8ab4f8">核对：files/' + ggbFile.split('/').pop() + ' 与 web3d.nocache.js 是否 200</span>');
+      return;
     }
-  });
+    // 给引擎一点加载时间再撤遮罩
+    setTimeout(function () {
+      var ld = document.getElementById('loading');
+      if (ld) ld.style.display = 'none';
+    }, 1800);
+  }
 
-  setTimeout(function() {
+  if (document.readyState === 'complete') {
+    injectSafely();
+  } else {
+    window.addEventListener('load', injectSafely);
+  }
+
+  // ④ 兜底提示：6s 还在转圈，说明引擎依赖没拉下来
+  setTimeout(function () {
     var ld = document.getElementById('loading');
     if (ld && ld.style.display !== 'none') {
-      document.getElementById('loadingMsg').innerHTML += '<br><span style="font-size:12px;color:#8ab4f8;margin-top:10px;display:inline-block;">若长时间无响应，请检查离线包 web3d.nocache.js 路径</span>';
+      document.getElementById('loadingMsg').innerHTML +=
+        '<br><span style="font-size:12px;color:#fbbf24;display:inline-block;margin-top:10px;">'
+        + '⚠️ 引擎迟迟未就绪:F12→Network 搜 web3d.nocache.js 是否 404</span>';
     }
-  }, 3000);
-
+  }, 6000);
 })();
 </script>
 </body>
