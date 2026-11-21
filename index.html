@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>可视化图谱</title>
-<script src="./js/echarts.min.js"></script>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0b0e14; color: #e6edf3; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overflow: auto; }
   #chart { width: 100vw; height: 100vh; min-width: 1200px; min-height: 900px; }
@@ -23,6 +22,9 @@
 </style>
 </head>
 <body>
+<!-- 改动①：首屏即时提示，杜绝"黑屏以为坏了" -->
+<div id="boot" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0e14;color:#00f0ff;font-size:18px;letter-spacing:3px;z-index:999">图谱加载中…</div>
+
 <div class="title-bar">可视化图谱</div>
 <div class="guide">
   <h4>📖 操作方法</h4>
@@ -36,7 +38,13 @@
 <div id="chart"></div>
 <div class="legend" id="legend"></div>
 
+<!-- 改动①：echarts 挪到 body 末尾，先出界面再解析库 -->
+<script src="./js/echarts.min.js"></script>
 <script>
+if (typeof echarts === 'undefined') {
+  document.getElementById('boot').style.color = '#fbbf24';
+  document.getElementById('boot').textContent = '⚠️ 图表库没加载，请检查 js/echarts.min.js 是否已上传';
+} else {
 var chart = echarts.init(document.getElementById('chart'));
 var focused = null;
 
@@ -115,11 +123,10 @@ var gps = [
 var nodes = [], links = [];
 var R_MOD = 260, R_GP = 470, ANG_STEP = 36;
 
-// 中心
+// 中心（顺手合并了原来重复的 id 键，功能不变）
 nodes.push({
-  id: "center", name: "可视化图谱", fullName: "数学分析（第六版·上册）可视化图谱", isCenter: true,
   id: "center", name: "数学分析（上册）", fullName: "数学分析（第六版·上册）", isCenter: true,
-  symbolSize: 78, itemStyle: { color: "#00f0ff", shadowBlur: 35, shadowColor: "#00f0ff" },
+  symbolSize: 78, itemStyle: { color: "#00f0ff" },
   label: { show: true, fontSize: 18, fontWeight: "bold", color: "#fff" },
   x: 0, y: 0, fixed: true
 });
@@ -130,7 +137,7 @@ modules.forEach(function(m, i) {
   var x = R_MOD * Math.cos(rad), y = R_MOD * Math.sin(rad);
   nodes.push({
     id: m.id, name: "模块" + (i + 1) + "\n" + m.short, fullName: "模块" + (i + 1) + " " + m.short, isModule: true, modColor: m.color,
-    symbolSize: 60, itemStyle: { color: m.color, shadowBlur: 20, shadowColor: m.color },
+    symbolSize: 60, itemStyle: { color: m.color }, /* 改动③：去掉 shadowBlur */
     label: { show: true, fontSize: 14, fontWeight: "bold", color: "#fff", lineHeight: 16 },
     x: x, y: y, fixed: true, ang: rad
   });
@@ -166,7 +173,7 @@ gps.forEach(function(g) {
   var x = r * Math.cos(a), y = r * Math.sin(a);
   nodes.push({
     id: g.gp, name: g.gp, fullName: g.full, gp: g.gp, mod: g.mod, lvl: g.lvl, isGP: true, modColor: m.color,
-    symbolSize: 22, itemStyle: { color: m.color, opacity: 0, shadowBlur: 10, shadowColor: m.color },
+    symbolSize: 22, itemStyle: { color: m.color, opacity: 0 }, /* 改动③：去掉 shadowBlur */
     label: { show: false, fontSize: 12, fontWeight: "bold", color: "#e6edf3" },
     link: "pages/demo.html?id=" + g.gp,
     x: x, y: y, fixed: true, ang: a
@@ -197,7 +204,8 @@ function buildSeries() {
       var active = !focused || focused === n.id;
       n.itemStyle.opacity = active ? 1 : 0.25;
       n.label.opacity = active ? 1 : 0.3;
-      if (focused === n.id) { n.symbolSize = 72; n.itemStyle.shadowBlur = 35; }
+      /* 改动③：聚焦高亮改用描边，零阴影成本，白板不卡 */
+      if (focused === n.id) { n.symbolSize = 72; n.itemStyle.borderWidth = 3; n.itemStyle.borderColor = "#ffffff"; }
     }
     return n;
   });
@@ -212,7 +220,12 @@ function buildSeries() {
   return {
     type: "graph", layout: "none", data: data, links: lks,
     roam: "move", zoom: 1, center: [0, 0],
-    emphasis: { focus: "adjacency", scale: 1.12, itemStyle: { shadowBlur: 20, shadowColor: "#00f0ff" } }
+    /* 改动②：首屏 0 动画秒出，只保留聚焦过渡手感 */
+    animation: true,
+    animationDuration: 0,
+    animationDurationUpdate: 450,
+    animationEasingUpdate: "cubicOut",
+    emphasis: { focus: "adjacency", scale: 1.12, itemStyle: { shadowBlur: 8, shadowColor: "#00f0ff" } }
   };
 }
 
@@ -231,14 +244,17 @@ chart.setOption({
   series: [buildSeries()]
 });
 
+/* 改动④：画完立刻撤掉"加载中" */
+var _boot = document.getElementById('boot'); if (_boot) _boot.remove();
+
 // ===== 聚焦：以点击的模块为中心 =====
 function focusModule(modId) {
   focused = modId;
   var mod = nodes.find(function(n) { return n.id === modId && n.isModule; });
   if (!mod) return;
   var ang = Math.atan2(mod.y, mod.x);
-  var r = -100; // 视口向模块"内侧"回退，让模块居中
-  var cx = mod.x - r * Math.cos(ang);   // 减号：方向相反
+  var r = -100;
+  var cx = mod.x - r * Math.cos(ang);
   var cy = mod.y - r * Math.sin(ang);
   chart.setOption({ series: [Object.assign({}, buildSeries(), { center: [cx, cy], zoom: 2.6 })] }, true);
   document.getElementById('btnReset').classList.add('show');
@@ -261,15 +277,15 @@ function resetView() {
   document.getElementById('btnReset').classList.remove('show');
 }
 
-// 图例
+// 图例（顺手合并了原来重复的 var html，输出一致）
 (function() {
-  var html = '<div class="item"><span class="center-dot"></span>可视化图谱（上册全貌）</div>';
   var html = '<div class="item"><span class="center-dot"></span>数学分析（上册）</div>';
   modules.forEach(function(m, i) { html += '<div class="item"><span class="dot" style="background:' + m.color + '"></span>模块' + (i + 1) + '　' + m.short + '</div>'; });
   document.getElementById("legend").innerHTML = html;
 })();
 
 window.addEventListener("resize", function() { chart.resize(); });
+} /* 闭合 else：echarts 加载成功分支 */
 </script>
 </body>
 </html>
